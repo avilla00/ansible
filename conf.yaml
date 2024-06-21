@@ -1,6 +1,6 @@
 ---
 - name: Configuracion de LAMP en los servidores
-  hosts: all
+  hosts: linux
   become: yes
 
   tasks:
