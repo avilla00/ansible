@@ -63,7 +63,7 @@
 
     - name: Creacion del archivo de configuracion
       template:
-        src: apache.cfg
+        src: /home/alexvilla/ansible/apache.cfg
         dest: "/etc/apache2/sites-available/{{inventory_hostname}}.conf"
       changed_when: false
 
