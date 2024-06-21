@@ -1,0 +1,84 @@
+---
+- name: Configuracion de LAMP en los servidores
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Preparacion previa de los servidores
+      apt:
+        update_cache: yes
+        name:
+          - sudo
+          - ufw
+        state: present
+      changed_when: false
+    
+    - name: Instalacion de Apache
+      apt:
+        name: apache2
+        state: present
+      changed_when: false
+
+    - name: Permitir trafico HTTP / HTTPS
+      ufw:
+        rule: allow
+        name: "WWW Full"
+      changed_when: false
+
+    - name: Instalacion de MariaDB
+      apt:
+        name: mariadb-server
+        state: present
+      changed_when: false
+
+    - name: Configuracion de MariaDB
+      shell: >
+        echo -e "\n\nn\nn\ny\ny\ny\ny" | mysql_secure_installation
+      changed_when: false
+
+    - name: Instalacion de PHP con paquetes
+      apt:
+        name: "{{item}}"
+        state: present
+      loop:
+        - php
+        - libapache2-mod-php
+        - php-mysql
+      changed_when: false
+
+    - name: Creacion de carpeta para el dominio
+      file:
+        path: "/var/www/{{inventory_hostname}}"
+        state: directory
+      changed_when: false
+
+    - name: Asignacion de permisos a la carpeta
+      file:
+        path: "/var/www/{{inventory_hostname}}"
+        state: directory
+        owner: "{{ansible_user}}"
+        group: "{{ansible_user}}"
+        recurse: yes
+      changed_when: false
+
+    - name: Creacion del archivo de configuracion
+      template:
+        src: apache.cfg
+        dest: "/etc/apache2/sites-available/{{inventory_hostname}}.conf"
+      changed_when: false
+
+    - name: Habilitar el nuevo host virtual
+      command: a2ensite {{inventory_hostname}}
+      changed_when: false
+
+    - name: Deshabilitar el sitio web predeterminado de Apache
+      apache2_module:
+        state: absent
+        name: "000-default.conf"
+      changed_when: false
+
+    - name: Recargar Apache para aplicar los cambios
+      systemd:
+        name: apache2
+        state: restarted
+      changed_when: false
