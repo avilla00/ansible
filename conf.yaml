@@ -1,42 +1,45 @@
 ---
-- name: Configuracion de LAMP en los servidores
+- name: Configurar LAMP en Servidores
   hosts: linux
   become: yes
 
+  vars_files:
+    - vars.yaml
+
   tasks:
-    - name: Preparacion previa de los servidores
+    - name: Preparar Servidores
       apt:
         update_cache: yes
         name:
           - sudo
           - ufw
         state: present
-      changed_when: false
-    
-    - name: Instalacion de Apache
+
+    - name: Instalar Apache
       apt:
         name: apache2
         state: present
-      changed_when: false
+      register: apache
 
-    - name: Permitir trafico HTTP / HTTPS
+    - name: Permitir trafico HTTP/HTTPS
       ufw:
         rule: allow
         name: "WWW Full"
-      changed_when: false
+      when: apache.changed
+      notify: Reiniciar Apache
 
-    - name: Instalacion de MariaDB
+    - name: Instalar MariaDB
       apt:
         name: mariadb-server
         state: present
-      changed_when: false
+      register: mariadb
 
-    - name: Configuracion de MariaDB
+    - name: Configurar MariaDB
       shell: >
         echo -e "\n\nn\nn\ny\ny\ny\ny" | mysql_secure_installation
-      changed_when: false
+      when: mariadb.changed
 
-    - name: Instalacion de PHP con paquetes
+    - name: Instalar PHP
       apt:
         name: "{{item}}"
         state: present
@@ -44,41 +47,43 @@
         - php
         - libapache2-mod-php
         - php-mysql
-      changed_when: false
+      notify: Reiniciar Apache
 
-    - name: Creacion de carpeta para el dominio
+    - name: Crear Carpeta para Dominio
       file:
-        path: "/var/www/{{inventory_hostname}}"
+        path: "/var/www/{{dominio}}"
         state: directory
-      changed_when: false
+      register: carpeta
 
-    - name: Asignacion de permisos a la carpeta
+    - name: Asignar Permisos a Carpeta
       file:
-        path: "/var/www/{{inventory_hostname}}"
+        path: "/var/www/{{dominio}}"
         state: directory
-        owner: "{{ansible_user}}"
-        group: "{{ansible_user}}"
+        owner: "{{usuario}}"
+        group: "{{usuario}}"
         recurse: yes
-      changed_when: false
+      when: carpeta.changed
+      notify: Reiniciar Apache
 
-    - name: Creacion del archivo de configuracion
+    - name: Crear Archivo de Configuracion
       template:
         src: /home/alexvilla/.ansible/templates/vhost.cfg
-        dest: "/etc/apache2/sites-available/{{inventory_hostname}}.conf"
-      changed_when: false
+        dest: "/etc/apache2/sites-available/{{dominio}}.conf"
+      register: archivo
 
-    - name: Habilitar el nuevo host virtual
-      command: a2ensite {{inventory_hostname}}
-      changed_when: false
+    - name: Habilitar Nuevo VirtualHost
+      command: a2ensite {{dominio}}
+      when: archivo.changed
 
-    - name: Deshabilitar el sitio web predeterminado de Apache
-      apache2_module:
+    - name: Deshabilitar Sitio Predeterminado de Apache
+      file:
+        path: "/etc/apache2/sites-available/000-default.conf"
         state: absent
-        name: "000-default.conf"
-      changed_when: false
+      when: archivo.changed
+      notify: Reiniciar Apache
 
-    - name: Recargar Apache para aplicar los cambios
+  handlers:
+    - name: Reiniciar Apache
       systemd:
         name: apache2
         state: restarted
-      changed_when: false
